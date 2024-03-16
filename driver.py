@@ -1,13 +1,3 @@
-"""
-BIG TODOS:
-    - build data visualization dashboard (dash, plotly)
-    - build data pipeline (torch, scikit-learn)
-        - preprocessing (cleaning, formatting)
-        - transforms (power, differencing, standardization, normalization)
-    - add distributed training (ray + aws)
-    - add experiment monitoring (w&b)
-"""
-
 import os
 
 import ray
@@ -15,46 +5,18 @@ import torch
 from ray import tune, train
 from ray.tune.schedulers.hb_bohb import HyperBandForBOHB
 from ray.tune.search.bohb import TuneBOHB
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 
+from config import config
 from src.visualization import build_dashboard
+from src.DataFactory import DataFactory
 from src.Trainable import Trainable
-from src.models import BasicLSTM
-
-
-# Constants
-n_features = 5
-
-# Choose model manually
-model = BasicLSTM
-
-config = {
-
-    # Model
-    'n_features': n_features,
-    'horizon_size': 24,
-    'model': model,
-    **model.get_hyperspace(),
-
-    # Data
-    'log_transform': tune.choice([False, True]),
-
-    # Training
-    'train_val_split': 0.8,
-    'n_epochs': tune.randint(1, 5),
-    'batch_size': tune.randint(64, 256),
-    'lr': tune.uniform(0.0001, 0.01),
-}
-
-
-for i in range(n_features):
-    config[f'feature_{i}_normalizer'] = tune.choice([MinMaxScaler, StandardScaler, RobustScaler])
 
 
 if __name__ == "__main__":
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    build_dashboard(DataFactory().pd_data)
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     ray.init(local_mode=True, num_cpus=os.cpu_count())
 
     max_iterations = 10

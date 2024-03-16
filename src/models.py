@@ -15,7 +15,7 @@ class BasicLSTM(torch.nn.Module):
                                     hidden_size=self.n_hidden,
                                     num_layers=self.n_layers,
                                     batch_first=True)
-        self.l_linear = torch.nn.Linear(self.n_hidden * self.seq_len, self.n_features)
+        self.l_linear = torch.nn.Linear(self.n_hidden * self.seq_len, self.horizon_size)
 
     def init_hidden(self, batch_size, device):
         hidden_state = torch.zeros(self.n_layers, batch_size, self.n_hidden).to(device)
@@ -34,4 +34,5 @@ class BasicLSTM(torch.nn.Module):
             'seq_length': tune.randint(24, 14*24),
             'n_hidden': tune.randint(20, 100),
             'n_layers': tune.randint(2, 10),
+            'horizon_size': tune.randint(24, 14*24),
         }

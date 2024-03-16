@@ -10,9 +10,26 @@ OPTIONS_STYLE = {'display': 'inline-block',
                  'padding-right':  '20px'}
 
 
-def build_dashboard(data):
+def build_dashboard(pd_data):
 
-    features = data[0:2]
+    features = pd_data.columns[2:]
+
+    @callback(
+        Output(component_id='line-graph', component_property='figure'),
+        Input(component_id='displayed-feature-radio-item', component_property='value')
+    )
+    def display_feature(feature):
+        fig = px.line(pd_data, x='Date', y=feature)
+        return fig
+
+    @callback(
+        Output(component_id='inspector', component_property='style'),
+        Input(component_id='toggle-inspector', component_property='n_clicks'))
+    def toggle_inspector(n_clicks):
+        if n_clicks % 2:
+            return {'display': 'block'}
+        else:
+            return {'display': 'none'}
 
     app = Dash(__name__)
     app.layout = html.Div([
@@ -27,7 +44,6 @@ def build_dashboard(data):
 
 
         html.Div([
-
 
             # Transforms
             html.Div([
@@ -60,38 +76,14 @@ def build_dashboard(data):
             }
         ),
 
-
-
         # Data table
         html.Button('Inspector', id='toggle-inspector', n_clicks=0),
-        html.Div([dash_table.DataTable(data=df.to_dict('records'), page_size=10)],
+        html.Div([dash_table.DataTable(data=pd_data.to_dict('records'), page_size=10)],
                  id='inspector',
                  style={
-                     'display': 'none'
+                     'display': 'block'
                  })
     ])
 
     app.run(debug=True)
 
-
-@callback(
-    Output(component_id='line-graph', component_property='figure'),
-    Input(component_id='displayed-feature-radio-item', component_property='value')
-)
-def display_feature(feature):
-    fig = px.line(df, x='Date', y=feature)
-    return fig
-
-
-@callback(
-   Output(component_id='inspector', component_property='style'),
-   Input(component_id='toggle-inspector', component_property='n_clicks'))
-def toggle_inspector(n_clicks):
-    if n_clicks % 2:
-        return {'display': 'block'}
-    else:
-        return {'display': 'none'}
-
-
-def normalize_feature(feature):
-    pass

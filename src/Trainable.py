@@ -20,12 +20,12 @@ class Trainable(tune.Trainable):
         self.x_train, self.y_train, self.x_val, self.y_val = self.data_factory.generate_datasets(config)
 
         # Model
-        self.model = config['model'](**config)
+        self.model = config['settings']['model'](config['settings']['n_features'], **config['model_space'])
         self.model.to(self.device)
 
         # Training
         self.criterion = torch.nn.MSELoss()
-        self.optimizer = torch.optim.Adam(config['lr'])
+        self.optimizer = config['training_space']['optimizer'](self.model.parameters(), **config['training_space']['optimizer_space'])
 
     def save_checkpoint(self, checkpoint_dir: str) -> Optional[Dict]:
         # Subclasses should override this to implement save().
@@ -50,12 +50,12 @@ class Trainable(tune.Trainable):
 
     def step(self):
         loss = None
-        batch_size = self.params['batch_size']
+        batch_size = self.config['training_space']['batch_size']
 
-        for t in range(self.params['n_epochs']):
-            for b in range(0, len(self.X), batch_size):
-                inpt = self.X[b:b + batch_size, :, :]
-                target = self.Y[b:b + batch_size, :]
+        for t in range(self.config['training_space']['n_epochs']):
+            for b in range(0, len(self.x_train), batch_size):
+                inpt = self.x_train[b:b + batch_size, :, :]
+                target = self.y_train[b:b + batch_size, :]
 
                 x_batch = torch.tensor(inpt, dtype=torch.float32).to(self.device)
                 y_batch = torch.tensor(target, dtype=torch.float32).to(self.device)
@@ -76,4 +76,8 @@ class Trainable(tune.Trainable):
 
     def cleanup(self):
         # Subclasses should override this for any cleanup on stop.
+        pass
+
+    # TODO: add resource requests for gpu usage
+    def default_resource_request(self, **kwargs):
         pass
