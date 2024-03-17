@@ -31,8 +31,8 @@ class BasicLSTM(torch.nn.Module):
     @staticmethod
     def get_hyperspace():
         return {
-            'seq_length': tune.randint(24, 14*24),
-            'n_hidden': tune.randint(20, 100),
-            'n_layers': tune.randint(2, 10),
-            'horizon_size': tune.randint(24, 14*24),
+            'seq_length': tune.randint(24, 2*24),
+            'n_hidden': tune.randint(10, 20),
+            'n_layers': tune.randint(2, 5),
+            'horizon_size': tune.randint(1, 24),
         }

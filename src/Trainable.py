@@ -2,8 +2,11 @@ from typing import Optional, Dict
 
 import torch
 import ray.tune as tune
+from ray.tune import PlacementGroupFactory
 
 from src.DataFactory import DataFactory
+import os
+import sys
 
 
 class Trainable(tune.Trainable):
@@ -49,6 +52,7 @@ class Trainable(tune.Trainable):
         pass
 
     def step(self):
+
         loss = None
         batch_size = self.config['training_space']['batch_size']
 
@@ -57,16 +61,19 @@ class Trainable(tune.Trainable):
                 inpt = self.x_train[b:b + batch_size, :, :]
                 target = self.y_train[b:b + batch_size, :]
 
-                x_batch = torch.tensor(inpt, dtype=torch.float32).to(self.device)
-                y_batch = torch.tensor(target, dtype=torch.float32).to(self.device)
+                x_batch = inpt.clone().detach().to(self.device)
+                y_batch = target.clone().detach().to(self.device)
 
                 self.model.init_hidden(x_batch.size(0), self.device)
                 output = self.model(x_batch)
+
+                # TODO: Recover original data scale to ensure fair comparison between different models (log)
                 loss = self.criterion(output.view(-1), y_batch.view(-1))
 
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
+
 
         return {"episode_reward_mean": loss.item()}
 
@@ -78,6 +85,11 @@ class Trainable(tune.Trainable):
         # Subclasses should override this for any cleanup on stop.
         pass
 
-    # TODO: add resource requests for gpu usage
-    def default_resource_request(self, **kwargs):
-        pass
+    """
+    @classmethod
+    def default_resource_request(cls, config):
+        return PlacementGroupFactory([{"CPU": 2}, {"CUDA": 1/4}])
+    """
+
+
+

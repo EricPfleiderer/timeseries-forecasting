@@ -14,10 +14,9 @@ from src.Trainable import Trainable
 
 if __name__ == "__main__":
 
-    build_dashboard(DataFactory().pd_data)
+    # build_dashboard(DataFactory().pd_data)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    ray.init(local_mode=True, num_cpus=os.cpu_count())
+    ray.init(local_mode=True)
 
     max_iterations = 10
     bohb_hyperband = HyperBandForBOHB(
@@ -31,9 +30,11 @@ if __name__ == "__main__":
     bohb_search = tune.search.ConcurrencyLimiter(bohb_search, max_concurrent=8)
 
     tuner = tune.Tuner(
-        Trainable,
+        # tune.with_resources(Trainable, resources=tune.PlacementGroupFactory([{'cpu': n_cpus, 'gpu': n_gpus}])),
+        tune.with_resources(Trainable, resources={'cpu': 1, 'gpu': 1/8}),
         run_config=train.RunConfig(
-            name="bohb_test", stop={"training_iteration": max_iterations}
+            name="bohb_test",
+            stop={"training_iteration": max_iterations}
         ),
         tune_config=tune.TuneConfig(
             metric="episode_reward_mean",

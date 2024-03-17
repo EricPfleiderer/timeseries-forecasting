@@ -1,22 +1,38 @@
 import pandas as pd
 import torch
 from copy import copy
+import numpy as np
 
 
 class DataFactory:
 
     def __init__(self):
         self.pd_data = pd.read_excel("data/energy.xlsx")
-
-        # TODO: Clean data (NaNs)
-        # TODO: Interpolate missing data points
-
         self.np_data = self.pd_data.iloc[:, 2:].to_numpy()
+        self.np_data = self.interpolate_nans(self.np_data)
         self.data = torch.Tensor(self.np_data)
         self.normalizers = []
+        self.config = None
+
+    @staticmethod
+    def interpolate_nans(np_data):
+
+        # Data should have shape [n_samples, n_features]
+
+        def nan_helper(y):
+            return np.isnan(y), lambda z: z.nonzero()[0]
+
+        for i in range(np_data.shape[1]):
+            nans, x = nan_helper(np_data[:, i])
+            np_data[nans, i] = np.interp(x(nans), x(~nans), np_data[~nans, i])
+
+        assert not np.any(np.isnan(np_data))
+
+        return np_data
 
     def generate_datasets(self, config):
 
+        self.config = config
         out_data = copy(self.data)
 
         # Power transforms
