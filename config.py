@@ -18,7 +18,7 @@ config = {
     'settings': {
         'model': model,
         'n_features': n_features,  # TODO: Size dynamically according to data shape
-        'train_val_split': 0.8,
+        'train_val_split': 0.75,
     },
 
     'model_space': {
@@ -30,8 +30,9 @@ config = {
     },
 
     'training_space': {
-        'n_epochs': tune.randint(1, 5),
-        'batch_size': tune.randint(64, 256),
+        # 'n_epochs': tune.randint(1, 5),
+        'n_epochs': 1,
+        'batch_size': tune.randint(32, 128),
         'optimizer': tune.choice([torch.optim.SGD, torch.optim.Adam]),
         'optimizer_space': {
             'lr': tune.uniform(0.0001, 0.01),
@@ -40,4 +41,4 @@ config = {
 }
 
 for i in range(n_features):
-    config['data_space'][f'normalizer_{i}'] = tune.choice([MinMaxScaler, StandardScaler, RobustScaler])
+    config['data_space'][f'normalizer_{i}'] = tune.choice([MinMaxScaler, RobustScaler, StandardScaler])

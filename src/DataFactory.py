@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import torch
 from copy import copy
@@ -19,34 +21,45 @@ class DataFactory:
 
         # Data should have shape [n_samples, n_features]
 
-        def nan_helper(y):
+        def nan_finder(y):
             return np.isnan(y), lambda z: z.nonzero()[0]
 
         for i in range(np_data.shape[1]):
-            nans, x = nan_helper(np_data[:, i])
+            nans, x = nan_finder(np_data[:, i])
             np_data[nans, i] = np.interp(x(nans), x(~nans), np_data[~nans, i])
 
-        assert not np.any(np.isnan(np_data))
+        DataFactory.assert_clean_data(torch.tensor(np_data))
 
         return np_data
 
+    @ staticmethod
+    def assert_clean_data(data):
+        assert not torch.any(torch.isnan(data))
+        assert not torch.any(torch.isinf(data))
+
     def generate_datasets(self, config):
+
+        logging.info(f'Generating datasets...')
 
         self.config = config
         out_data = copy(self.data)
+        logging.info(f'Raw data: ' + DataFactory.describe_tensor(out_data))
 
-        # Power transforms
+        logging.info('Performing power transforms')
         if config['data_space']['log_transform']:
             out_data = torch.log(out_data)
 
+        DataFactory.assert_clean_data(out_data)
+
+        logging.info('Splitting data into training and validation sets')
         # Split train / val early to avoid data leakages from differencing, normalization  and other transforms
         x_train = out_data[:int(config['settings']['train_val_split']*out_data.size(0))]
         x_val = out_data[int(config['settings']['train_val_split']*out_data.size(0)):]
 
-        # Difference transforms
+        logging.info('Performing difference transforms')
         # TODO: Add n-differencing to remove trends of nth order
 
-        # Feature wise normalization
+        logging.info('Performing normalization transforms')
         for i in range(out_data.size(1)):
             normalizer = config['data_space'][f'normalizer_{i}']()
             np_norm_feat_train = normalizer.fit_transform(torch.unsqueeze(x_train[:, i], dim=1))
@@ -55,28 +68,41 @@ class DataFactory:
             x_val[:, i] = torch.squeeze(torch.Tensor(np_norm_feat_val), dim=1)
             self.normalizers.append(normalizer)
 
-        # Build training sequences and targets
+        logging.info(f'Training data:     ' + DataFactory.describe_tensor(x_train))
+        logging.info(f'Validation data:   ' + DataFactory.describe_tensor(x_val))
+
+        DataFactory.assert_clean_data(out_data)
+
+        logging.info('Building final sequences...')
         seq_len = config['model_space']['seq_length']
         horizon_size = config['model_space']['horizon_size']
-        n_train_sequences = x_train.size(0) - seq_len
-        n_val_sequences = x_val.size(0) - seq_len
+        n_train_sequences = x_train.size(0) - seq_len - horizon_size
+        n_val_sequences = x_val.size(0) - seq_len - horizon_size
         train_sequences = torch.empty(size=(n_train_sequences, seq_len, x_train.size(1)))
         train_targets = torch.empty(size=(n_train_sequences, horizon_size))
         val_sequences = torch.empty(size=(n_val_sequences, seq_len, x_val.size(1)))
         val_targets = torch.empty(size=(n_val_sequences, horizon_size))
 
-        for i in range(n_train_sequences-horizon_size):
+        for i in range(n_train_sequences):
             end_idx = i + seq_len
             train_sequences[i] = x_train[i:end_idx]
             train_targets[i] = x_train[end_idx: end_idx + horizon_size, 0]
 
-        for i in range(n_val_sequences-horizon_size):
+        for i in range(n_val_sequences):
             end_idx = i + seq_len
             val_sequences[i] = x_val[i:end_idx]
             val_targets[i] = x_val[end_idx: end_idx + horizon_size, 0]
 
+        logging.info(f'Training sequences:     ' + DataFactory.describe_tensor(train_sequences))
+        logging.info(f'Training targets:       ' + DataFactory.describe_tensor(train_targets))
+        logging.info(f'Validation sequences:   ' + DataFactory.describe_tensor(val_sequences))
+        logging.info(f'Validation targets:     ' + DataFactory.describe_tensor(val_targets))
         # TODO: Shuffle targets and sequences using the same permutation
         return train_sequences, train_targets, val_sequences, val_targets
+
+    @staticmethod
+    def describe_tensor(tensor_data):
+        return f'Shape:{tensor_data.shape}, min: {round(float(torch.min(tensor_data)), 6)}, max: {round(float(torch.max(tensor_data)), 6)}'
 
     def recover_scale(self, data):
         # TODO: Build inverse pipeline to recover original data scale
