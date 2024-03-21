@@ -47,7 +47,7 @@ if __name__ == "__main__":
     bohb_hyperband = HyperBandForBOHB(
         time_attr="training_iteration",
         max_t=max_iterations,
-        reduction_factor=2,
+        reduction_factor=3,
         stop_last_trials=False,
     )
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
             stop={"training_iteration": max_iterations}
         ),
         tune_config=tune.TuneConfig(
-            metric="episode_reward_mean",
+            metric="val_loss",
             mode="min",
             scheduler=bohb_hyperband,
             search_alg=bohb_search,

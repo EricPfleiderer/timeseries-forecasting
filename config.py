@@ -30,8 +30,6 @@ config = {
     },
 
     'training_space': {
-        # 'n_epochs': tune.randint(1, 5),
-        'n_epochs': 1,
         'batch_size': tune.randint(32, 128),
         'optimizer': tune.choice([torch.optim.SGD, torch.optim.Adam]),
         'optimizer_space': {

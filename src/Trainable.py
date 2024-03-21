@@ -14,7 +14,7 @@ class Trainable(tune.Trainable):
 
     def setup(self, config: Dict):
 
-        logging.info('SET UP START')
+        logging.info(f'SET UP START: Trial {self.trial_id}')
 
         self.config = config
 
@@ -34,7 +34,7 @@ class Trainable(tune.Trainable):
         self.criterion = torch.nn.MSELoss()
         self.optimizer = config['training_space']['optimizer'](self.model.parameters(), **config['training_space']['optimizer_space'])
 
-        logging.info('SET UP END')
+        logging.info(f'SET UP END: Trial {self.trial_id}')
 
     def save_checkpoint(self, checkpoint_dir: str) -> Optional[Dict]:
         # Subclasses should override this to implement save().
@@ -58,49 +58,39 @@ class Trainable(tune.Trainable):
         pass
 
     def step(self):
-        logging.info('STEP START')
+        logging.info(f'STEP START: Trial {self.trial_id}')
         batch_size = self.config['training_space']['batch_size']
 
         train_loss = None
-        for t in range(self.config['training_space']['n_epochs']):
-            for b in range(0, len(self.x_train), batch_size):
+        n_train_batches = self.x_train.size(0) // batch_size
+        n_val_batches = self.x_val.size(0) // batch_size
+        train_logs_granularity = 10
+        train_logs_idx = [int(n_train_batches / train_logs_granularity * i) for i in range(1, 1 + train_logs_granularity)]
+        val_logs_granularity = 5
+        val_logs_idx = [int(n_val_batches / val_logs_granularity * i) for i in range(1, 1 + val_logs_granularity)]
 
-                inpt = self.x_train[b:b + batch_size, :, :]
-                target = self.y_train[b:b + batch_size, :]
+        for b in range(0, len(self.x_train), batch_size):
 
-                x_batch = inpt.clone().detach().to(self.device)
-                y_batch = target.clone().detach().to(self.device)
+            inpt = self.x_train[b:b + batch_size, :, :]
+            target = self.y_train[b:b + batch_size, :]
 
-                self.model.init_hidden(x_batch.size(0), self.device)
-                output = self.model(x_batch)
+            x_batch = inpt.clone().detach().to(self.device)
+            y_batch = target.clone().detach().to(self.device)
 
-                DataFactory.assert_clean_data(output)
+            self.model.init_hidden(x_batch.size(0), self.device)
+            output = self.model(x_batch)
 
-                train_loss = self.criterion(output.view(-1), y_batch.view(-1))
+            DataFactory.assert_clean_data(output)
 
-                self.optimizer.zero_grad()
-                train_loss.backward()
+            train_loss = self.criterion(output.view(-1), y_batch.view(-1))
+            train_loss.backward()
 
-                if torch.isinf(torch.tensor([train_loss.item()])):
-                    logging.warning('Inf loss.')
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
-                batch_i = b//batch_size
-                n_batches = self.x_train.size(0)//batch_size
-
-                num_padding = ''.join(['0' for _ in range(3-len(str(batch_i)))])
-                denum_padding = ''.join(['0' for _ in range(3-len(str(n_batches)))])
-
-                progress = int((batch_i / n_batches)*100)
-                loading_bar = ''.join(['=' for _ in range(progress)]) + ">" + ''.join(['-' for _ in range(100-progress)])
-
-                granularity = 10
-                prints = [int(n_batches / granularity * i) for i in range(1, 1+granularity)]
-                prints.append(n_batches)
-
-                if batch_i in prints:
-                    logging.info(f'[Training]:   {num_padding}{batch_i}/{denum_padding}{n_batches} |{loading_bar}| loss:{round(train_loss.item(), 6)}')
+            batch_i = b//batch_size
+            if batch_i in train_logs_idx:
+                logging.info(f'[Training]:   {Trainable.get_batch_progress(batch_i, n_train_batches, train_loss)}')
 
         # Validation
         val_loss = None
@@ -118,22 +108,20 @@ class Trainable(tune.Trainable):
             val_loss = self.criterion(output.view(-1), y_batch.view(-1))
 
             batch_i = b // batch_size
-            n_batches = self.x_val.size(0) // batch_size
-            progress = int((batch_i / n_batches) * 100)
-            loading_bar = ''.join(['=' for _ in range(progress)]) + ">" + ''.join(
-                ['-' for _ in range(100 - progress)])
-            num_padding = ''.join(['0' for _ in range(3 - len(str(batch_i)))])
-            denum_padding = ''.join(['0' for _ in range(3 - len(str(n_batches)))])
-            granularity = 5
-            prints = [int(n_batches / granularity * i) for i in range(1, 1 + granularity)]
-            prints.append(n_batches)
+            if batch_i in val_logs_idx:
+                logging.info(f'[Validation]: {Trainable.get_batch_progress(batch_i, n_val_batches, val_loss)}')
 
-            if batch_i in prints:
-                logging.info(f'[Validation]: {num_padding}{batch_i}/{denum_padding}{n_batches} |{loading_bar}| loss:{round(val_loss.item(), 6)}')
+        logging.info(f'STEP END: Trial {self.trial_id}')
+        return {'train_loss': train_loss.item(), 'val_loss': val_loss.item()}
 
-        logging.info('STEP END')
+    @staticmethod
+    def get_batch_progress(batch_i, n_batches, loss):
+        progress = int((batch_i / n_batches) * 100)
+        loading_bar = ''.join(['=' for _ in range(progress)]) + ">" + ''.join(['-' for _ in range(100 - progress)])
+        num_padding = ''.join(['0' for _ in range(3 - len(str(batch_i)))])
+        denum_padding = ''.join(['0' for _ in range(3 - len(str(n_batches)))])
 
-        return {"episode_reward_mean": train_loss.item()}
+        return f'{num_padding}{batch_i}/{denum_padding}{n_batches} |{loading_bar}|' + ' loss:{0:.6f}'.format(round(loss.item(), 6))
 
     def reset_config(self, new_config: Dict):
         # Resets configuration without restarting the trial.

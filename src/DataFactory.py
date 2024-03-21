@@ -39,11 +39,13 @@ class DataFactory:
 
     def generate_datasets(self, config):
 
+        header_padding = ''.join([' ' for _ in range(50)])
+
         logging.info(f'Generating datasets...')
 
         self.config = config
         out_data = copy(self.data)
-        logging.info(f'Raw data: ' + DataFactory.describe_tensor(out_data))
+        logging.info(f'Raw data:             ' + header_padding + DataFactory.describe_tensor(out_data))
 
         logging.info('Performing power transforms')
         if config['data_space']['log_transform']:
@@ -68,8 +70,8 @@ class DataFactory:
             x_val[:, i] = torch.squeeze(torch.Tensor(np_norm_feat_val), dim=1)
             self.normalizers.append(normalizer)
 
-        logging.info(f'Training data:     ' + DataFactory.describe_tensor(x_train))
-        logging.info(f'Validation data:   ' + DataFactory.describe_tensor(x_val))
+        logging.info(f'Training data:        ' + header_padding + DataFactory.describe_tensor(x_train))
+        logging.info(f'Validation data:      ' + header_padding + DataFactory.describe_tensor(x_val))
 
         DataFactory.assert_clean_data(out_data)
 
@@ -93,16 +95,32 @@ class DataFactory:
             val_sequences[i] = x_val[i:end_idx]
             val_targets[i] = x_val[end_idx: end_idx + horizon_size, 0]
 
-        logging.info(f'Training sequences:     ' + DataFactory.describe_tensor(train_sequences))
-        logging.info(f'Training targets:       ' + DataFactory.describe_tensor(train_targets))
-        logging.info(f'Validation sequences:   ' + DataFactory.describe_tensor(val_sequences))
-        logging.info(f'Validation targets:     ' + DataFactory.describe_tensor(val_targets))
+        logging.info(f'Validation data:      ' + header_padding + DataFactory.describe_tensor(x_val))
+        logging.info(f'Training sequences:   ' + header_padding + DataFactory.describe_tensor(train_sequences))
+        logging.info(f'Training targets:     ' + header_padding + DataFactory.describe_tensor(train_targets))
+        logging.info(f'Validation sequences: ' + header_padding + DataFactory.describe_tensor(val_sequences))
+        logging.info(f'Validation targets:   ' + header_padding + DataFactory.describe_tensor(val_targets))
         # TODO: Shuffle targets and sequences using the same permutation
         return train_sequences, train_targets, val_sequences, val_targets
 
     @staticmethod
     def describe_tensor(tensor_data):
-        return f'Shape:{tensor_data.shape}, min: {round(float(torch.min(tensor_data)), 6)}, max: {round(float(torch.max(tensor_data)), 6)}'
+
+        if len(tensor_data.size()) != 2 and len(tensor_data.size()) != 3:
+            raise ValueError('The describe_tensor method only supports 2d or 3d inputs')
+
+        shape_chars = 25
+
+        output = f'| Shape: {tensor_data.size(0)} x {tensor_data.size(1)}'
+
+        if len(tensor_data.size()) == 3:
+            output += f' x {tensor_data.size(2)}'
+
+        output += ''.join([' ' for _ in range(shape_chars - len(output))]) + '|'
+        output += ' min: {0:.6f} '.format(round(float(torch.min(tensor_data)), 6)) + '|'
+        output += ' max: {0:.6f} '.format(round(float(torch.max(tensor_data)), 6)) + '|'
+
+        return output
 
     def recover_scale(self, data):
         # TODO: Build inverse pipeline to recover original data scale
