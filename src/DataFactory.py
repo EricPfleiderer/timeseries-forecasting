@@ -5,6 +5,8 @@ import torch
 from copy import copy
 import numpy as np
 
+from src.enums import Colors
+
 
 class DataFactory:
 
@@ -45,23 +47,25 @@ class DataFactory:
 
         self.config = config
         out_data = copy(self.data)
+        logging.info(Colors.UNDERLINE.value + 'Preprocessed data summary' + Colors.END.value)
         logging.info(f'Raw data:             ' + header_padding + DataFactory.describe_tensor(out_data))
 
-        logging.info('Performing power transforms')
+        logging.info('Performing power transforms...')
         if config['data_space']['log_transform']:
             out_data = torch.log(out_data)
 
         DataFactory.assert_clean_data(out_data)
 
-        logging.info('Splitting data into training and validation sets')
+        logging.info('Splitting data into training and validation sets...')
         # Split train / val early to avoid data leakages from differencing, normalization  and other transforms
+        # TODO: pick validation set bounds randomly
         x_train = out_data[:int(config['settings']['train_val_split']*out_data.size(0))]
         x_val = out_data[int(config['settings']['train_val_split']*out_data.size(0)):]
 
-        logging.info('Performing difference transforms')
+        logging.info('Performing difference transforms...')
         # TODO: Add n-differencing to remove trends of nth order
 
-        logging.info('Performing normalization transforms')
+        logging.info('Performing normalization transforms...')
         for i in range(out_data.size(1)):
             normalizer = config['data_space'][f'normalizer_{i}']()
             np_norm_feat_train = normalizer.fit_transform(torch.unsqueeze(x_train[:, i], dim=1))
@@ -70,6 +74,7 @@ class DataFactory:
             x_val[:, i] = torch.squeeze(torch.Tensor(np_norm_feat_val), dim=1)
             self.normalizers.append(normalizer)
 
+        logging.info(Colors.UNDERLINE.value + 'Processed data summary' + Colors.END.value)
         logging.info(f'Training data:        ' + header_padding + DataFactory.describe_tensor(x_train))
         logging.info(f'Validation data:      ' + header_padding + DataFactory.describe_tensor(x_val))
 
@@ -95,12 +100,21 @@ class DataFactory:
             val_sequences[i] = x_val[i:end_idx]
             val_targets[i] = x_val[end_idx: end_idx + horizon_size, 0]
 
+        logging.info('Shuffling sequences...')
+        train_permutations = torch.randperm(train_sequences.size(0))
+        val_permutations = torch.randperm(val_sequences.size(0))
+        train_sequences = train_sequences[train_permutations]
+        train_targets = train_targets[train_permutations]
+        val_sequences = val_sequences[val_permutations]
+        val_targets = val_targets[val_permutations]
+
+        logging.info(Colors.UNDERLINE.value + 'Final data summary' + Colors.END.value)
         logging.info(f'Validation data:      ' + header_padding + DataFactory.describe_tensor(x_val))
         logging.info(f'Training sequences:   ' + header_padding + DataFactory.describe_tensor(train_sequences))
         logging.info(f'Training targets:     ' + header_padding + DataFactory.describe_tensor(train_targets))
         logging.info(f'Validation sequences: ' + header_padding + DataFactory.describe_tensor(val_sequences))
         logging.info(f'Validation targets:   ' + header_padding + DataFactory.describe_tensor(val_targets))
-        # TODO: Shuffle targets and sequences using the same permutation
+
         return train_sequences, train_targets, val_sequences, val_targets
 
     @staticmethod

@@ -7,12 +7,13 @@ from ray.air.integrations.wandb import setup_wandb
 from ray.tune import PlacementGroupFactory
 
 from src.DataFactory import DataFactory
+from src.enums import Colors
 
 
 class Trainable(tune.Trainable):
 
     def setup(self, config: Dict):
-        logging.info(f'SET UP START: Trial {self.trial_id}')
+        logging.info(Colors.BOLD.value + f'SET UP START: Trial {self.trial_id}' + Colors.END.value)
         self.config = config
         self.device = None
 
@@ -34,7 +35,7 @@ class Trainable(tune.Trainable):
         self.criterion = torch.nn.MSELoss()
         self.optimizer = config['training_space']['optimizer'](self.model.parameters(), **config['training_space']['optimizer_space'])
 
-        logging.info(f'SET UP END: Trial {self.trial_id}')
+        logging.info(Colors.BOLD.value + f'SET UP END: Trial {self.trial_id}' + Colors.END.value)
 
     def save_checkpoint(self, checkpoint_dir: str) -> Optional[Dict]:
         # Subclasses should override this to implement save().
@@ -45,7 +46,7 @@ class Trainable(tune.Trainable):
         pass
 
     def step(self):
-        logging.info(f'STEP #{self.iteration} START: Trial {self.trial_id}')
+        logging.info(Colors.BOLD.value + f'STEP #{self.iteration} START: Trial {self.trial_id}' + Colors.END.value)
         batch_size = self.config['training_space']['batch_size']
 
         # Device
@@ -93,7 +94,7 @@ class Trainable(tune.Trainable):
                 logging.info(f'[Training]    {Trainable.get_batch_progress(batch_i, n_train_batches, train_loss)}')
 
         mean_train_loss /= n_train_batches
-        logging.info('[Training]    Mean loss: {0:.6f}'.format(mean_train_loss))
+        logging.info('[Training]    ' + Colors.UNDERLINE.value + 'Mean loss: {0:.6f}'.format(mean_train_loss) + Colors.END.value)
 
         # Validation
         for b in range(0, len(self.x_val), batch_size):
@@ -116,9 +117,9 @@ class Trainable(tune.Trainable):
                 logging.info(f'[Validation]  {Trainable.get_batch_progress(batch_i, n_val_batches, val_loss)}')
 
         mean_val_loss /= n_val_batches
-        logging.info('[Validation]  Mean loss: {0:.6f}'.format(mean_val_loss))
+        logging.info('[Validation]  ' + Colors.UNDERLINE.value + 'Mean loss: {0:.6f}'.format(mean_val_loss) + Colors.END.value)
 
-        logging.info(f'STEP #{self.iteration} END: Trial {self.trial_id}')
+        logging.info(Colors.BOLD.value + f'STEP #{self.iteration} END: Trial {self.trial_id}' + Colors.END.value)
         metrics = {'mean_train_loss': mean_train_loss, 'mean_val_loss': mean_val_loss}
         # self.wandb.log(metrics)
         return metrics
@@ -138,7 +139,7 @@ class Trainable(tune.Trainable):
 
     @classmethod
     def default_resource_request(cls, config):
-        return PlacementGroupFactory([{"CPU": 1}, {"GPU": 1/8}])
+        return PlacementGroupFactory([{"CPU": 2}, {"GPU": 1/4}])
 
 
 
