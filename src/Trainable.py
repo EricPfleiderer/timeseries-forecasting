@@ -16,6 +16,7 @@ class Trainable(tune.Trainable):
         self.config = config
         self.device = None
 
+        '''
         self.wandb = setup_wandb(
             config,
             trial_id=self.trial_id,
@@ -23,6 +24,7 @@ class Trainable(tune.Trainable):
             group="Example",
             project='timeseries-forecasting',
         )
+        '''
 
         self.data_factory = DataFactory()
         self.x_train, self.y_train, self.x_val, self.y_val = self.data_factory.generate_datasets(config)
@@ -118,7 +120,7 @@ class Trainable(tune.Trainable):
 
         logging.info(f'STEP #{self.iteration} END: Trial {self.trial_id}')
         metrics = {'mean_train_loss': mean_train_loss, 'mean_val_loss': mean_val_loss}
-        self.wandb.log(metrics)
+        # self.wandb.log(metrics)
         return metrics
 
     @staticmethod
