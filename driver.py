@@ -3,12 +3,14 @@ import sys
 import logging
 
 import ray
+import wandb
 from ray import tune, train
 from ray.tune.schedulers.hb_bohb import HyperBandForBOHB
 from ray.tune.search.bohb import TuneBOHB
 
 from config import config
 from src.visualization import build_dashboard
+from src.DataFactory import DataFactory
 from src.Trainable import Trainable
 
 
@@ -41,31 +43,37 @@ if __name__ == "__main__":
 
     set_logging(logging.INFO)
 
+    # os.environ['WANDB_SILENT'] = "true"
+    # wandb.init(project='timeseries-forecasting')
+
+    import torch
+    print(torch.cuda.is_available())  # <== True!
+
     ray.init(local_mode=True)
 
-    max_iterations = 30
+    max_iterations = 10
     bohb_hyperband = HyperBandForBOHB(
         time_attr="training_iteration",
         max_t=max_iterations,
-        reduction_factor=3,
+        reduction_factor=2,
         stop_last_trials=False,
     )
 
     bohb_search = TuneBOHB()
-    bohb_search = tune.search.ConcurrencyLimiter(bohb_search, max_concurrent=4)
+    bohb_search = tune.search.ConcurrencyLimiter(bohb_search, max_concurrent=8)
 
     tuner = tune.Tuner(
-        tune.with_resources(Trainable, resources={'cpu': 2, 'gpu': 1/4}),
+        tune.with_resources(Trainable, resources={'cpu': 1, 'gpu': 1/8}),
         run_config=train.RunConfig(
             name="bohb_test",
             stop={"training_iteration": max_iterations}
         ),
         tune_config=tune.TuneConfig(
-            metric="val_loss",
+            metric="mean_val_loss",
             mode="min",
             scheduler=bohb_hyperband,
             search_alg=bohb_search,
-            num_samples=16,
+            num_samples=8,
         ),
         param_space=config,
     )
